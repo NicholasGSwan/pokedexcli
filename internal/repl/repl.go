@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/NicholasGSwan/pokedexcli/internal/models"
+	"github.com/NicholasGSwan/pokedexcli/internal/pokecache"
 )
 
 type cliCommand struct {
@@ -23,6 +25,8 @@ type config struct {
 	next string
 	prev string
 }
+
+var cache *pokecache.Cache
 
 func init() {
 	commands = map[string]cliCommand{
@@ -47,6 +51,7 @@ func init() {
 			callback:    commandMapb,
 		},
 	}
+	cache = pokecache.NewCache(time.Second * 5)
 }
 
 func cleanInput(text string) []string {
@@ -124,12 +129,20 @@ func commandMapb(c *config) error {
 }
 
 func getMapResults(url string) (models.LocationAreaGetResult, error) {
+	var locArea models.LocationAreaGetResult
+	data, ok := cache.Get(url)
+	if ok {
+		err := json.Unmarshal(data, &locArea)
+		if err != nil {
+			return models.LocationAreaGetResult{}, err
+		}
+		return locArea, err
+	}
 	res, err := http.Get(url)
 	if err != nil {
 		return models.LocationAreaGetResult{}, err
 	}
 
-	var locArea models.LocationAreaGetResult
 	decoder := json.NewDecoder(res.Body)
 	if err := decoder.Decode(&locArea); err != nil {
 		return models.LocationAreaGetResult{}, err

@@ -46,11 +46,13 @@ func (c *Cache) Add(key string, val []byte) {
 }
 
 func (c *Cache) reapLoop(interval time.Duration) {
+	c.mut.Lock()
+	c.mut.Unlock()
 	for key, ce := range c.cache {
 		if time.Since(ce.createdAt) > interval {
-			c.mut.Lock()
+
 			delete(c.cache, key)
-			c.mut.Unlock()
+
 		}
 	}
 }
