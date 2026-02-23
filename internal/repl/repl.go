@@ -24,6 +24,7 @@ var commands map[string]cliCommand
 type config struct {
 	next string
 	prev string
+	arg  string
 }
 
 var cache *pokecache.Cache
@@ -50,6 +51,11 @@ func init() {
 			description: "Lists previous page of map areas",
 			callback:    commandMapb,
 		},
+		"explore": {
+			name:        "explore",
+			description: "Lists all pokemon in Location Area. Takes location area name as an argument.",
+			callback:    commandPokemonInLocArea,
+		},
 	}
 	cache = pokecache.NewCache(time.Second * 5)
 }
@@ -68,6 +74,9 @@ func StartRepl() {
 		scanner.Scan()
 		words := cleanInput(scanner.Text())
 		command, ok := commands[words[0]]
+		if len(words) > 1 {
+			c.arg = words[1]
+		}
 		if ok {
 			command.callback(c)
 		} else {
@@ -128,6 +137,23 @@ func commandMapb(c *config) error {
 	return nil
 }
 
+func commandPokemonInLocArea(c *config) error {
+	var url string
+	if c.arg == "" {
+		fmt.Println("Command requires an argument")
+	} else {
+		url = "https://pokeapi.co/api/v2/location-area/" + c.arg
+	}
+	LA, err := getLocationDetails(url)
+	if err != nil {
+		return err
+	}
+	for _, pokeEnc := range LA.PokemonEncounters {
+		fmt.Println(pokeEnc.Pokemon.Name)
+	}
+	return nil
+}
+
 func getMapResults(url string) (models.LocationAreaGetResult, error) {
 	var locArea models.LocationAreaGetResult
 	data, ok := cache.Get(url)
@@ -142,7 +168,7 @@ func getMapResults(url string) (models.LocationAreaGetResult, error) {
 	if err != nil {
 		return models.LocationAreaGetResult{}, err
 	}
-
+	defer res.Body.Close()
 	decoder := json.NewDecoder(res.Body)
 	if err := decoder.Decode(&locArea); err != nil {
 		return models.LocationAreaGetResult{}, err
@@ -157,4 +183,26 @@ func printLocationAreas(locArea models.LocationAreaGetResult, c *config) {
 	for _, area := range areas {
 		fmt.Println(area.Name)
 	}
+}
+
+func getLocationDetails(url string) (models.LocationArea, error) {
+	var LA models.LocationArea
+	data, ok := cache.Get(url)
+	if ok {
+		err := json.Unmarshal(data, &LA)
+		if err != nil {
+			return models.LocationArea{}, err
+		}
+		return LA, nil
+	}
+	res, err := http.Get(url)
+	if err != nil {
+		return models.LocationArea{}, err
+	}
+	defer res.Body.Close()
+	decoder := json.NewDecoder(res.Body)
+	if err := decoder.Decode(&LA); err != nil {
+		return models.LocationArea{}, err
+	}
+	return LA, nil
 }
